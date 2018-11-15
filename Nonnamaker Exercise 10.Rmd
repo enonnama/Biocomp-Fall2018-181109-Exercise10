@@ -1,0 +1,210 @@
+---
+title: "Nonnamaker Exercise 10"
+output: html_document
+---
+
+## Question 1. 
+
+```{r include=FALSE}
+rm(list=ls())
+setwd("/Users/emilynonnamaker/Box/personalStuff/School/PhD/biocomputingFall2018/Exercises/Biocomp-Fall2018-181109-Exercise10")
+dat <- read.csv("data.txt")
+library(ggplot2)
+library(arm)
+```
+
+hump-shaped vs. linear function of x by comparing a quadratic
+(a + bx + cx2) vs. linear (a + bx) model.
+Generate a script that evaluates which model is more appropriate for the data in data.txt.
+
+```{r}
+N=length(dat)
+x=dat$x
+y=dat$y
+# plot our observations
+ggplot(dat,aes(x=x,y=y))+geom_point()+theme_classic() # nice line. 
+```
+
+For the first model (linear)
+```{r}
+linlike<-function(p,x,y){
+B0=p[1]
+B1=p[2]
+sigma=exp(p[3])
+expected=B0+B1*x
+linll=-sum(dnorm(x=y,mean=expected,sd=sigma,log=TRUE))
+return(linll)
+}
+```
+
+```{r}
+initialGuess=c(1,1,1) # for B0, B1, and sigma
+fitlin=optim(par=initialGuess,fn=linlike,x=x,y=y)
+# fit is a variable that contains a list describing the result of minimization
+print(fitlin) # it converged, good
+
+lm<-lm(y ~ x) 
+display(lm) # sanity check
+```
+
+For the second model (quadratic)
+
+```{r}
+quadlike<-function(p,x,y){
+B0=p[1]
+B1=p[2]
+C=p[3]
+sigma=exp(p[4])
+expected=B0+B1*x+C*I(x^2)
+quadll=-sum(dnorm(x=y,mean=expected,sd=sigma,log=TRUE))
+return(quadll)
+}
+```
+
+```{r}
+initialGuess=c(1,1,1,1) # for B0, B1, C, and sigma.
+fitquad=optim(par=initialGuess,fn=quadlike,x=x,y=y)
+# fit is a variable that contains a list describing the result of minimization
+print(fitquad) # also converged, nice
+```
+
+To test the two:
+
+```{r}
+t.stat=2*(fitlin$value-fitquad$value)
+t.stat
+
+df=length(fitquad$par)-length(fitlin$par)
+df
+
+1-pchisq(t.stat, df=1)
+```
+
+Plot it up to check it out:
+
+```{r, warning=FALSE}
+plot(y~x)
+abline(lm, col='red')
+abline(lm(y~x+I(x^2)))
+```
+
+Looking at p-values, there's no real difference between the model fits (this can be seen when plotting as well), so then by parsimony, the linear model is best. 
+
+## Question 2
+
+A classic model of competition between two species was developed by Lotka & Volterra. This model has two state variables described by two differential equations:
+
+* $dN1/dt = R1(1 − N1α11 − N2α12)N1$
+
+* $dN2/dt = R2(1 − N2α22 − N1α21)N2$
+
+The criteria for coexistence of two species in the Lotka-Volterra competition model is α12 < α11 and α21 < α22
+
+Generate a script that uses three or more model simulations to demonstrate the validity of these criteria for coexistence.
+
+```{r include=FALSE}
+library(deSolve)
+```
+
+Model: 
+
+```{r}
+LVSim<-function(t,y,p){
+  N1=y[1]
+  N2=y[2]
+  R1=p[1]
+  R2=p[2]
+  a11=p[3]
+  a12=p[4]
+  a21=p[5]
+  a22=p[6]
+  
+  dN1dt=R1*(1-(N1*a11)-(N2*a12))*N1
+  dN2dt=R2*(1-(N2*a22)-(N1*a21))*N2
+
+  return(list(c(dN1dt,dN2dt)))
+}
+```
+
+# Case 1
+
+Correct (for my own refrence) 
+α11 > α12 and α21 < α22
+(big), (small), (small), (big)
+
+First half is correct
+α11 > α12 and α21 > α22
+
+```{r}
+times=1:100
+y0=c(0.1,0.1)
+#params2=c(R1, R2, a11 (big), a12 (small), a21(big), a22(small))
+params2=c(0.5, 1, 2, 1, 2, 1)
+sim2=ode(y=y0,times=times,func=LVSim,parms=params2)
+out2=data.frame(time=sim2[,1],pop=sim2[,2],case=sim2[,3])
+ggplot(out2,aes(x=time,y=pop))+geom_line()+geom_line(data=out2,mapping=aes(x=time,y=case),col='red')+theme_classic()
+```
+
+One population dominates the other. 
+
+# Case 2
+
+Correct (for my own refrence) 
+α11 > α12 and α21 < α22
+(big), (small), (small), (big)
+
+Second half is correct
+α11 < α12 and α21 < α22
+
+```{r}
+times=1:100
+y0=c(0.1,0.1)
+#params3=c(R1, R2, a11 (small), a12 (big), a21(small), a22(big))
+params3=c(0.5, 1, 1, 2, 1, 2)
+sim3=ode(y=y0,times=times,func=LVSim,parms=params3)
+out3=data.frame(time=sim3[,1],pop=sim3[,2],case=sim3[,3])
+ggplot(out3,aes(x=time,y=pop))+geom_line()+geom_line(data=out3,mapping=aes(x=time,y=case),col='red')+theme_classic()
+```
+
+Again, one population dominates the other. 
+
+# Case 3
+
+Correct (for my own refrence) 
+α11 > α12 and α21 < α22
+(big), (small), (small), (big)
+
+Both correct
+α11 > α12 and α21 < α22
+
+```{r}
+times=1:100
+y0=c(0.1,0.1)
+#params4=c(R1, R2, a11 (big), a12 (small), a21(small), a22(big))
+params4=c(0.5, 1, 2, 1, 1, 2)
+sim4=ode(y=y0,times=times,func=LVSim,parms=params4)
+out4=data.frame(time=sim4[,1],pop=sim4[,2],case=sim4[,3])
+ggplot(out4,aes(x=time,y=pop))+geom_line()+geom_line(data=out4,mapping=aes(x=time,y=case),col='red')+theme_classic()
+```
+
+The populations end up equalizing, and co-existing. 
+
+# Case 4
+
+Correct (for my own refrence) 
+α11 > α12 and α21 < α22
+(big), (small), (small), (big)
+
+None correct
+α11 < α12 and α21 > α22
+
+```{r}
+times=1:100
+y0=c(0.1,0.1)
+params5=c(0.5,1,1,2,2,1)
+sim4=ode(y=y0,times=times,func=LVSim,parms=params5)
+out4=data.frame(time=sim4[,1],pop=sim4[,2],tumor=sim4[,3])
+ggplot(out4,aes(x=time,y=pop))+geom_line()+geom_line(data=out4,mapping=aes(x=time,y=tumor),col='red')+theme_classic()
+```
+
+One population completely oucompetes the other. 
